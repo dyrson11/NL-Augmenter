@@ -8,6 +8,9 @@ from interfaces.QuestionAnswerOperation import QuestionAnswerOperation
 from interfaces.SentenceOperation import SentenceOperation
 from interfaces.TaggingOperation import TaggingOperation
 from tasks.TaskTypes import TaskType
+from transformations.out_of_vocabulary_substitutions import (
+    OutOfVocabularySubstitutions,
+)
 
 """
 This is the evaluation engine.
@@ -83,13 +86,22 @@ def execute_model(
             isinstance(impl, SentenceOperation)
             and TaskType[task_type] == TaskType.TEXT_CLASSIFICATION
         ):
-            return evaluate_text_classification.evaluate(
-                impl,
-                evaluate_filter,
-                model_name,
-                dataset,
-                split=f"test[:{percentage_of_examples}%]",
-            )
+            if isinstance(impl, OutOfVocabularySubstitutions):
+                return evaluate_text_classification.evaluate_with_training(
+                    impl,
+                    evaluate_filter,
+                    model_name,
+                    dataset,
+                    split=f"test[:{percentage_of_examples}%]",
+                )
+            else:
+                return evaluate_text_classification.evaluate(
+                    impl,
+                    evaluate_filter,
+                    model_name,
+                    dataset,
+                    split=f"test[:{percentage_of_examples}%]",
+                )
 
         elif (
             isinstance(impl, QuestionAnswerOperation)

@@ -62,7 +62,13 @@ Dataset for data in plain texts where each line is a datapoint
 class TextLineDataset(BaseDataset):
     tasks = [TaskType.TEXT_CLASSIFICATION]
 
-    def __init__(self, data: List[str], labels: List):
+    def __init__(
+        self,
+        data: List[str],
+        labels: List,
+        training_data=None,
+        training_labels=None,
+    ):
         super(TextLineDataset, self).__init__(data)
         assert len(data) == len(
             labels
@@ -72,6 +78,8 @@ class TextLineDataset(BaseDataset):
             datapoint: label
             for datapoint, label in zip(self.data, self.labels)
         }
+        self.training_labels = training_labels
+        self.training_data = training_data
 
     @classmethod
     def from_huggingface(cls, dataset, task_type, fields, max_size=None):
@@ -82,6 +90,29 @@ class TextLineDataset(BaseDataset):
             data.append(example[fields[0]])
             labels.append(example[fields[1]])
         return cls(data, labels)
+
+    @classmethod
+    def from_huggingface_with_training(
+        cls, training_dataset, dataset, task_type, fields, max_size=None
+    ):
+        data = []
+        labels = []
+        training_data = []
+        training_labels = []
+
+        max_size = max_size or len(dataset)
+        for example in list(dataset)[:max_size]:
+            data.append(example[fields[0]])
+            labels.append(example[fields[1]])
+        for example in list(training_dataset):
+            training_data.append(example[fields[0]])
+            training_labels.append(example[fields[1]])
+        return cls(
+            data,
+            labels,
+            training_data=training_data,
+            training_labels=training_labels,
+        )
 
     def apply_filter(self, filter: SentenceOperation) -> TextLineDataset:
         filtered_data = []
@@ -106,6 +137,9 @@ class TextLineDataset(BaseDataset):
         successful_num = 0
         failed_num = 0
 
+        if self.training_data:
+            transformation.analyze(self.training_data)
+
         for line in tqdm(self.data):
             pt_examples = transformation.generate(line)
             successful_pt, failed_pt = transformation.compare(
@@ -126,7 +160,8 @@ class TextLineDataset(BaseDataset):
                 successful_num / total_num if total_num > 0 else 0,
             )
         )
-        if total_num == 0: return None
+        if total_num == 0:
+            return None
         return TextLineDataset(transformed_data, self.labels)
 
     def __iter__(self):
@@ -163,7 +198,7 @@ class KeyValueDataset(BaseDataset):
         TaskType.TEXT_TO_TEXT_GENERATION,
         TaskType.QUESTION_ANSWERING,
         TaskType.QUESTION_GENERATION,
-        TaskType.TEXT_CLASSIFICATION, # for >1 field classification
+        TaskType.TEXT_CLASSIFICATION,  # for >1 field classification
     ]
 
     # data: input data samples read from jsonl file
@@ -175,11 +210,13 @@ class KeyValueDataset(BaseDataset):
         data: List[dict],
         task_type=TaskType.TEXT_TO_TEXT_GENERATION,
         fields: List[str] = None,
+        training_data=None,
     ):
         super(KeyValueDataset, self).__init__(data)
         self.task_type = task_type
         self.fields = fields
         self.operation_type = None
+        self.training_data = training_data
 
     @classmethod
     def from_huggingface(cls, dataset, task_type, fields, max_size=None):
@@ -203,6 +240,34 @@ class KeyValueDataset(BaseDataset):
                     }
                 )
         return cls(data, task_type, fields)
+
+    @classmethod
+    def from_huggingface_with_training(
+        cls, training_dataset, dataset, task_type, fields, max_size=None
+    ):
+        data = []
+        training_data = []
+        max_size = max_size or len(dataset)
+        if task_type not in [
+            TaskType.QUESTION_ANSWERING,
+            TaskType.QUESTION_GENERATION,
+        ]:
+            for example in list(dataset)[:max_size]:
+                data.append({key: example[key] for key in fields})
+            for example in list(training_dataset):
+                training_data.append({key: example[key] for key in fields})
+        else:
+            # this is an ugly implementation, which hard-codes the squad data format
+            # TODO might need a more elegant way to deal with the fields with hierachy, e.g. the answers field in squad data (exampl['answers']['text'])
+            for example in list(dataset)[:max_size]:
+                data.append(
+                    {
+                        fields[0]: example[fields[0]],
+                        fields[1]: example[fields[1]],
+                        fields[2]: example[fields[2]]["text"],
+                    }
+                )
+        return cls(data, task_type, fields, training_data=training_data)
 
     def _analyze(self, subfields: List[str]):
         if subfields is None:
@@ -292,11 +357,17 @@ class KeyValueDataset(BaseDataset):
         _, transformation_func = self._analyze(subfields)
         transformed_data = []
         print("Applying transformation:")
-        
+
         # calculating ratio of transformed example to unchanged example
         successful_num = 0
         failed_num = 0
-        
+
+        if self.training_data:
+            training_data = [
+                example[self.fields[0]] for example in self.training_data
+            ]
+            transformation.analyze(training_data)
+
         for datapoint in tqdm(self.data):
             pt_examples = transformation_func(datapoint.copy(), transformation)
             successful_pt, failed_pt = transformation.compare(
@@ -304,9 +375,11 @@ class KeyValueDataset(BaseDataset):
             )
             successful_num += successful_pt
             failed_num += failed_pt
-            
-            transformed_data.extend(pt_examples)  # don't want self.data to be changed
-        
+
+            transformed_data.extend(
+                pt_examples
+            )  # don't want self.data to be changed
+
         total_num = successful_num + failed_num
 
         print(
@@ -318,7 +391,8 @@ class KeyValueDataset(BaseDataset):
                 successful_num / total_num if total_num > 0 else 0,
             )
         )
-        if total_num == 0: return None
+        if total_num == 0:
+            return None
         return KeyValueDataset(transformed_data, self.task_type, self.fields)
 
     def _apply_sentence_transformation(
