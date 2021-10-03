@@ -24,7 +24,7 @@ SIMPLE_REPLACE.update(GENDERED_TERMS)
 from initialize import spacy_nlp
 import spacy
 
-self.nlp = spacy_nlp if spacy_nlp else spacy.load("en_core_web_sm")
+nlp = spacy_nlp if spacy_nlp else spacy.load("en_core_web_sm")
 
 # SpaCy: lowercase is for dependency parser, uppercase is for part-of-speech tagger
 from spacy.symbols import (
@@ -477,23 +477,34 @@ class GenderNeutralRewrite(SentenceOperation):
                               "Their dream is to be a firefighter when they grow up."
     Source: https://arxiv.org/pdf/2102.06788.pdf
     """
+
     tasks = [
         TaskType.TEXT_CLASSIFICATION,
         TaskType.TEXT_TO_TEXT_GENERATION,
         TaskType.TEXT_TAGGING,
     ]
     languages = ["en"]
-    keywords = ["lexical", "syntactic",
-                "rule-based", "api-based", "transformer-based", "tokenizer-required",
-                "natural-sounding",
-                "high-precision",
-                "gender", "gender-neutral", "rewrite", "translation"]
+    keywords = [
+        "lexical",
+        "syntactic",
+        "rule-based",
+        "api-based",
+        "transformer-based",
+        "tokenizer-required",
+        "natural-sounding",
+        "high-precision",
+        "gender",
+        "gender-neutral",
+        "rewrite",
+        "translation",
+    ]
 
     def __init__(self, seed=0, max_outputs=1):
         super().__init__(seed, max_outputs=max_outputs)
 
-    def generate(self, sentence: str) -> List[str]:
-        gender_neutral_sentence = convert(
-            sentence=sentence, max_outputs=self.max_outputs
-        )
-        return [gender_neutral_sentence]
+    def generate(self, sentence: str):
+        # gender_neutral_sentence = convert(
+        #     sentence=sentence, max_outputs=self.max_outputs
+        # )
+        # return [gender_neutral_sentence]
+        return 1
