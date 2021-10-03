@@ -15,3 +15,5 @@ notebooks/leaderboard.ipynb
 .ipynb_checkpoints
 notebooks/leaderboard_*.csv
 NL_Augmenter.egg-info
+.pytest_cache
+.vector_cache
