@@ -1,2 +1,2 @@
-allennlp==2.5.0
-allennlp-models==2.5.0
+allennlp==2.7.0
+allennlp-models==2.7.0
